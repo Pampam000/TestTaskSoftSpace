@@ -1,0 +1,48 @@
+version: "3.9"
+
+volumes:
+  pg_data:
+
+services:
+  web:
+    container_name: web
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "${WEB_PORT}:${WEB_PORT}"
+    command: >
+      sh -c "python manage.py makemigrations &&
+             python manage.py migrate &&
+             python manage.py runserver ${WEB_HOST}:${WEB_PORT}"
+
+    volumes:
+      - ./app:/src/app
+    depends_on:
+      db:
+        condition: service_healthy
+    links:
+      - db
+
+    healthcheck:
+      test: ["CMD", "curl", "-X", "OPTIONS", "-f", "http://${WEB_HOST}:${WEB_PORT}/api"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: on-failure
+
+  db:
+    container_name: db
+    image: postgres:15-alpine
+    env_file:
+      - .env
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: on-failure
